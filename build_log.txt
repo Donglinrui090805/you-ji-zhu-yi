@@ -1,0 +1,2 @@
+﻿youjizhuyi.cpp
+Build finished. story.exe updated.

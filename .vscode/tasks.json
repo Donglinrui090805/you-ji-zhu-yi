@@ -1,0 +1,19 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "compile story",
+            "type": "shell",
+            "command": "cmd /c \"\"C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat\" && cl /EHsc /utf-8 /O2 youjizhuyi.cpp /I D:\\src\\storygame\\include /link /LIBPATH:D:\\src\\storygame\\x64\\vc16\\lib opencv_world481.lib gdiplus.lib /out:story.exe\"",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$msCompile",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        }
+    ]
+}
