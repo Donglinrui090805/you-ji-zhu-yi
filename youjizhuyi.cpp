@@ -11,7 +11,7 @@
 using namespace std;
 
 #define ts_1 0
-#define ts_2 50
+#define ts_2 30
 #define MAX_LINES 10
 #define LINE_HEIGHT 24
 #define FONT_SIZE_PX 24
@@ -53,8 +53,10 @@ static cv::Size getWinSize(const cv::Mat& frame) {
     return cv::Size(frame.cols, frame.rows);
 }
 
+static cv::Size g_lastWinSize(0, 0);
 static void showFrame(const cv::Mat& frame) {
     cv::Size ws = getWinSize(frame);
+    g_lastWinSize = ws;
     int ww = ws.width, wh = ws.height;
     double s = ((double)ww / frame.cols) < ((double)wh / frame.rows) ? ((double)ww / frame.cols) : ((double)wh / frame.rows);
     int tw = (int)(frame.cols * s);
@@ -69,6 +71,13 @@ static void showFrame(const cv::Mat& frame) {
     cv::imshow("story", canvas);
 }
 
+// 仅当窗口尺寸变化时才重绘（等待期间内容不变，避免无谓开销）
+static void showFrameCached(const cv::Mat& frame) {
+    cv::Size ws = getWinSize(frame);
+    if (ws == g_lastWinSize) return;
+    showFrame(frame);
+}
+
 static bool windowAlive() {
     try {
         return cv::getWindowProperty("story", cv::WND_PROP_VISIBLE) > 0;
@@ -78,6 +87,17 @@ static bool windowAlive() {
 }
 static void checkWindow() {
     if (!windowAlive()) exit(0);
+}
+
+// 在 totalMs 毫秒内持续检测窗口变化（仅尺寸变化时重绘，画面内容不变）
+static void refreshShow(const cv::Mat& show, int totalMs, int stepMs = 16) {
+    int waited = 0;
+    while (waited < totalMs) {
+        showFrameCached(show);
+        cv::waitKey(stepMs);
+        waited += stepMs;
+        checkWindow();
+    }
 }
 
 cv::Mat renderUI(const cv::Mat& baseBGRA, const vector<string>& lines, const string& prompt = "") {
@@ -114,6 +134,16 @@ cv::Mat renderUI(const cv::Mat& baseBGRA, const vector<string>& lines, const str
     return result;
 }
 
+// 等待任意键，等待期间检测窗口尺寸变化并实时重绘（内容不变，不重复渲染文字）
+static void waitAnyKey(const vector<string>& buf, const string& prompt = "") {
+    cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
+    while (true) {
+        showFrameCached(show);
+        if (cv::waitKey(16) >= 0) break;
+        checkWindow();
+    }
+}
+
 void t_print(cv::Mat& baseImg, vector<string>& buf, const string& s, bool waitEnd = true, const string& promptText = "请输入选择：按 1 / 2") {
     vector<string> chars;
     for (size_t i = 0; i < s.size();) {
@@ -135,15 +165,12 @@ void t_print(cv::Mat& baseImg, vector<string>& buf, const string& s, bool waitEn
             buf.back() = curLine;
         cv::Mat show = renderUI(g_baseBGRA, buf, "");
         showFrame(show);
-        cv::waitKey(ts_2);
+        refreshShow(show, ts_2);
         checkWindow();
     }
     if (waitEnd) {
         buf.push_back("");
-        cv::Mat show = renderUI(g_baseBGRA, buf, "");
-        showFrame(show);
-        cv::waitKey(ts_1);
-        checkWindow();
+        waitAnyKey(buf);
     } else {
         buf.push_back("");
         cv::Mat show = renderUI(g_baseBGRA, buf, promptText);
@@ -153,26 +180,26 @@ void t_print(cv::Mat& baseImg, vector<string>& buf, const string& s, bool waitEn
 
 int waitSelect(const cv::Mat& baseImg, vector<string>& buf) {
     string prompt = "请输入选择：按 1 / 2";
+    cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
     while (true) {
         int key = cv::waitKey(20);
         if (key == '1') return 1;
         if (key == '2') return 2;
         checkWindow();
-        cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
-        showFrame(show);
+        showFrameCached(show);
     }
 }
 
 int waitSelect3(const cv::Mat& baseImg, vector<string>& buf) {
     string prompt = "请输入选择：按 1 / 2 / 3";
+    cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
     while (true) {
         int key = cv::waitKey(20);
         if (key == '1') return 1;
         if (key == '2') return 2;
         if (key == '3') return 3;
         checkWindow();
-        cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
-        showFrame(show);
+        showFrameCached(show);
     }
 }
 
@@ -183,7 +210,7 @@ void clearScreen(vector<string>& buf) {
 cv::Mat p_print(string s) {
     cv::Mat img = cv::imread(s);
     if (img.empty()) {
-        cout << "image load failed!" << endl;
+        MessageBoxW(nullptr, L"图片加载失败！请确认图片文件与 story.exe 在同一目录。", L"story", MB_OK | MB_ICONERROR);
         return cv::Mat();
     }
     cv::cvtColor(img, g_baseBGRA, cv::COLOR_BGR2BGRA);
@@ -197,7 +224,6 @@ int main() {
     g_font = new Gdiplus::Font(g_fontFamily, (float)FONT_SIZE_PX, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     cv::Mat img = p_print("image2.png");
     if (img.empty()) {
-        cout << "image load failed!" << endl;
         Gdiplus::GdiplusShutdown(gdiplusToken);
         return -1;
     }
@@ -283,7 +309,7 @@ int main() {
         clearScreen(textBuf);
         t_print(img, textBuf, "【NE1-和光同尘】");
         t_print(img, textBuf, "按任意键结束游戏");
-        while (windowAlive()) { if (cv::waitKey(100) >= 0) break; }
+        waitAnyKey(textBuf);
         cv::destroyAllWindows();
         return 0;
     }
@@ -375,7 +401,7 @@ int main() {
         t_print(img, textBuf, "“宇宙在膨胀，星辰在远离。”");
         t_print(img, textBuf, "“我们都在坠落，只是隔着光年，再也无法触及彼此。”");
         t_print(img, textBuf, "按任意键结束游戏");
-        while (windowAlive()) { if (cv::waitKey(100) >= 0) break; }
+        waitAnyKey(textBuf);
         cv::destroyAllWindows();
         return 0;
     }
@@ -394,7 +420,7 @@ int main() {
     //最终章
     t_print(img, textBuf, "高考当天，小马心情跌宕起伏。");
     t_print(img, textBuf, "按任意键结束游戏");
-    while (windowAlive()) { if (cv::waitKey(100) >= 0) break; }
+    waitAnyKey(textBuf);
     cv::destroyAllWindows();
     delete g_font;
     delete g_fontFamily;
