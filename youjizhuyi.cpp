@@ -71,7 +71,6 @@ static void showFrame(const cv::Mat& frame) {
     cv::imshow("story", canvas);
 }
 
-// 仅当窗口尺寸变化时才重绘（等待期间内容不变，避免无谓开销）
 static void showFrameCached(const cv::Mat& frame) {
     cv::Size ws = getWinSize(frame);
     if (ws == g_lastWinSize) return;
@@ -89,7 +88,6 @@ static void checkWindow() {
     if (!windowAlive()) exit(0);
 }
 
-// 在 totalMs 毫秒内持续检测窗口变化（仅尺寸变化时重绘，画面内容不变）
 static void refreshShow(const cv::Mat& show, int totalMs, int stepMs = 16) {
     int waited = 0;
     while (waited < totalMs) {
@@ -134,7 +132,6 @@ cv::Mat renderUI(const cv::Mat& baseBGRA, const vector<string>& lines, const str
     return result;
 }
 
-// 等待任意键，等待期间检测窗口尺寸变化并实时重绘（内容不变，不重复渲染文字）
 static void waitAnyKey(const vector<string>& buf, const string& prompt = "") {
     cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
     while (true) {
@@ -223,10 +220,6 @@ int main() {
     g_fontFamily = new Gdiplus::FontFamily(L"SimHei");
     g_font = new Gdiplus::Font(g_fontFamily, (float)FONT_SIZE_PX, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     cv::Mat img = p_print("image2.png");
-    if (img.empty()) {
-        Gdiplus::GdiplusShutdown(gdiplusToken);
-        return -1;
-    }
     cv::namedWindow("story", cv::WINDOW_NORMAL);
     {
         int scrW = GetSystemMetrics(SM_CXSCREEN);
