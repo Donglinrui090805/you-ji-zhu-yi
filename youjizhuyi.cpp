@@ -69,6 +69,17 @@ static void showFrame(const cv::Mat& frame) {
     cv::imshow("story", canvas);
 }
 
+static bool windowAlive() {
+    try {
+        return cv::getWindowProperty("story", cv::WND_PROP_VISIBLE) > 0;
+    } catch (...) {
+        return false;
+    }
+}
+static void checkWindow() {
+    if (!windowAlive()) exit(0);
+}
+
 cv::Mat renderUI(const cv::Mat& baseBGRA, const vector<string>& lines, const string& prompt = "") {
     int imgH = baseBGRA.rows;
     int imgW = baseBGRA.cols;
@@ -125,12 +136,14 @@ void t_print(cv::Mat& baseImg, vector<string>& buf, const string& s, bool waitEn
         cv::Mat show = renderUI(g_baseBGRA, buf, "");
         showFrame(show);
         cv::waitKey(ts_2);
+        checkWindow();
     }
     if (waitEnd) {
         buf.push_back("");
         cv::Mat show = renderUI(g_baseBGRA, buf, "");
         showFrame(show);
         cv::waitKey(ts_1);
+        checkWindow();
     } else {
         buf.push_back("");
         cv::Mat show = renderUI(g_baseBGRA, buf, promptText);
@@ -144,6 +157,7 @@ int waitSelect(const cv::Mat& baseImg, vector<string>& buf) {
         int key = cv::waitKey(20);
         if (key == '1') return 1;
         if (key == '2') return 2;
+        checkWindow();
         cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
         showFrame(show);
     }
@@ -156,6 +170,7 @@ int waitSelect3(const cv::Mat& baseImg, vector<string>& buf) {
         if (key == '1') return 1;
         if (key == '2') return 2;
         if (key == '3') return 3;
+        checkWindow();
         cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
         showFrame(show);
     }
@@ -268,7 +283,7 @@ int main() {
         clearScreen(textBuf);
         t_print(img, textBuf, "【NE1-和光同尘】");
         t_print(img, textBuf, "按任意键结束游戏");
-        cv::waitKey(0);
+        while (windowAlive()) { if (cv::waitKey(100) >= 0) break; }
         cv::destroyAllWindows();
         return 0;
     }
@@ -360,7 +375,7 @@ int main() {
         t_print(img, textBuf, "“宇宙在膨胀，星辰在远离。”");
         t_print(img, textBuf, "“我们都在坠落，只是隔着光年，再也无法触及彼此。”");
         t_print(img, textBuf, "按任意键结束游戏");
-        cv::waitKey(0);
+        while (windowAlive()) { if (cv::waitKey(100) >= 0) break; }
         cv::destroyAllWindows();
         return 0;
     }
@@ -379,7 +394,7 @@ int main() {
     //最终章
     t_print(img, textBuf, "高考当天，小马心情跌宕起伏。");
     t_print(img, textBuf, "按任意键结束游戏");
-    cv::waitKey(0);
+    while (windowAlive()) { if (cv::waitKey(100) >= 0) break; }
     cv::destroyAllWindows();
     delete g_font;
     delete g_fontFamily;

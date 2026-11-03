@@ -1,0 +1,3 @@
+youjizhuyi.cpp
+Build finished. story.exe updated.
+Press any key to continue . . . 

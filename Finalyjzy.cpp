@@ -365,7 +365,7 @@ int main() {
         return 0;
     }
     clearScreen(textBuf);
-    t_print(img, textBuf, "小马和12班班主任赵姗算是结下梁子了，赵姗还在办公室贬低过樊叙，被小马反驳。");
+    t_print(img, textBuf, "小马和12班班主任赵娟算是结下梁子了，赵娟还在办公室贬低过樊叙，被小马反驳。");
     clearScreen(textBuf);
     //第六章
     t_print(img, textBuf, "小马过年期间回家，被催婚，且家里人都不太看好她的工作。");
@@ -374,7 +374,7 @@ int main() {
     t_print(img, textBuf, "高皓远带领14班同学反抗强权压制。");
     clearScreen(textBuf);
     //第七章
-    t_print(img, textBuf, "临近模考，赵姗把小马因学术纠纷肄业的事情抖落出来，小马被12班家长联名抵制。");
+    t_print(img, textBuf, "临近模考，赵娟把小马因学术纠纷肄业的事情抖落出来，小马被12班家长联名抵制。");
     t_print(img, textBuf, "但是由于14班同学的坚持，她继续担任14班班主任。");
     //最终章
     t_print(img, textBuf, "高考当天，小马心情跌宕起伏。");
