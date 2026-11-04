@@ -18,7 +18,7 @@ using namespace std;
 #define DIALOG_HEIGHT 240
 #define DIALOG_PADDING 16
 
-int a[10010];
+int a[110],favor[110];
 Gdiplus::Font* g_font = nullptr;
 Gdiplus::FontFamily* g_fontFamily = nullptr;
 cv::Mat g_baseBGRA;
@@ -141,6 +141,7 @@ static void waitAnyKey(const vector<string>& buf, const string& prompt = "") {
     }
 }
 
+//文字输出
 void t_print(cv::Mat& baseImg, vector<string>& buf, const string& s, bool waitEnd = true, const string& promptText = "请输入选择：按 1 / 2") {
     vector<string> chars;
     for (size_t i = 0; i < s.size();) {
@@ -175,6 +176,7 @@ void t_print(cv::Mat& baseImg, vector<string>& buf, const string& s, bool waitEn
     }
 }
 
+//双选
 int waitSelect(const cv::Mat& baseImg, vector<string>& buf) {
     string prompt = "请输入选择：按 1 / 2";
     cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
@@ -187,6 +189,7 @@ int waitSelect(const cv::Mat& baseImg, vector<string>& buf) {
     }
 }
 
+//三选
 int waitSelect3(const cv::Mat& baseImg, vector<string>& buf) {
     string prompt = "请输入选择：按 1 / 2 / 3";
     cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
@@ -200,10 +203,8 @@ int waitSelect3(const cv::Mat& baseImg, vector<string>& buf) {
     }
 }
 
-void clearScreen(vector<string>& buf) {
-    buf.clear();
-}
 
+//图片输出
 cv::Mat p_print(string s) {
     cv::Mat img = cv::imread(s);
     if (img.empty()) {
@@ -213,6 +214,17 @@ cv::Mat p_print(string s) {
     cv::cvtColor(img, g_baseBGRA, cv::COLOR_BGR2BGRA);
     return img;
 }
+
+//清屏
+void clearScreen(vector<string>& buf) {
+    buf.clear();
+}
+
+//好感度系统
+void updateFavor(int person, int favorValue) {
+    favor[person] += favorValue;
+}
+
 int main() {
     Gdiplus::GdiplusStartupInput gdiplusSI;
     ULONG_PTR gdiplusToken;

@@ -4,7 +4,7 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "D:/src/storygame/include"
+                "D:/storygame/include"
             ],
             "defines": [],
             "compilerPath": "cl.exe",
