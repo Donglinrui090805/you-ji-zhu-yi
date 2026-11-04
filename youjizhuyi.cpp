@@ -240,6 +240,7 @@ int main() {
         cv::resizeWindow("story", (int)(img.cols * s), (int)(img.rows * s));
     }
     vector<string> textBuf;
+
     //第一章
     t_print(img, textBuf, "14班成立，班内同学关系不佳。");
     t_print(img, textBuf, "高皓远认为从竞赛班淘汰的樊叙“装”。");
@@ -313,9 +314,12 @@ int main() {
         t_print(img, textBuf, "但我记得。我记得你们。");
         clearScreen(textBuf);
         t_print(img, textBuf, "【NE1-和光同尘】");
-        t_print(img, textBuf, "按任意键结束游戏");
+        t_print(img, textBuf, "按任意键结束游戏", false, "");
         waitAnyKey(textBuf);
         cv::destroyAllWindows();
+        delete g_font;
+        delete g_fontFamily;
+        Gdiplus::GdiplusShutdown(gdiplusToken);
         return 0;
     }
     //第四章
@@ -405,9 +409,12 @@ int main() {
         t_print(img, textBuf, "【BE2-光谱红移】");
         t_print(img, textBuf, "“宇宙在膨胀，星辰在远离。”");
         t_print(img, textBuf, "“我们都在坠落，只是隔着光年，再也无法触及彼此。”");
-        t_print(img, textBuf, "按任意键结束游戏");
+        t_print(img, textBuf, "按任意键结束游戏", false, "");
         waitAnyKey(textBuf);
         cv::destroyAllWindows();
+        delete g_font;
+        delete g_fontFamily;
+        Gdiplus::GdiplusShutdown(gdiplusToken);
         return 0;
     }
     clearScreen(textBuf);
@@ -424,7 +431,7 @@ int main() {
     t_print(img, textBuf, "但是由于14班同学的坚持，她继续担任14班班主任。");
     //最终章
     t_print(img, textBuf, "高考当天，小马心情跌宕起伏。");
-    t_print(img, textBuf, "按任意键结束游戏");
+    t_print(img, textBuf, "按任意键结束游戏", false, "");
     waitAnyKey(textBuf);
     cv::destroyAllWindows();
     delete g_font;
