@@ -98,6 +98,28 @@ static void refreshShow(const cv::Mat& show, int totalMs, int stepMs = 16) {
     }
 }
 
+//F键检测：waitKey返回值 + GetAsyncKeyState硬件状态兜底（不依赖窗口焦点）
+static bool isFavorKey(int key) {
+    if (key == 'f' || key == 'F') return true;
+    return (GetAsyncKeyState('F') & 0x8000) != 0;
+}
+
+//逐字间隔等待；按F返回true，否则等满totalMs返回false
+static bool waitCharInterval(const cv::Mat& show, int totalMs, int stepMs = 16) {
+    int waited = 0;
+    while (waited < totalMs) {
+        showFrameCached(show);
+        int key = cv::waitKey(stepMs);
+        if (isFavorKey(key)) return true;
+        waited += stepMs;
+        checkWindow();
+    }
+    return false;
+}
+
+//前向声明：好感度查看页面（定义在后面）
+void showFavor();
+
 cv::Mat renderUI(const cv::Mat& baseBGRA, const vector<string>& lines, const string& prompt = "") {
     int imgH = baseBGRA.rows;
     int imgW = baseBGRA.cols;
@@ -136,7 +158,13 @@ static void waitAnyKey(const vector<string>& buf, const string& prompt = "") {
     cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
     while (true) {
         showFrameCached(show);
-        if (cv::waitKey(16) >= 0) break;
+        int key = cv::waitKey(16);
+        if (isFavorKey(key)) {
+            showFavor();
+            showFrame(show);
+            continue;
+        }
+        if (key == ' ') break;
         checkWindow();
     }
 }
@@ -163,13 +191,17 @@ void t_print(cv::Mat& baseImg, vector<string>& buf, const string& s, bool waitEn
             buf.back() = curLine;
         cv::Mat show = renderUI(g_baseBGRA, buf, "");
         showFrame(show);
-        refreshShow(show, ts_2);
+        if (waitCharInterval(show, ts_2)) {
+            showFavor();
+            showFrame(show);
+        }
         checkWindow();
     }
     if (waitEnd) {
         buf.push_back("");
         waitAnyKey(buf);
-    } else {
+    } 
+    else {
         buf.push_back("");
         cv::Mat show = renderUI(g_baseBGRA, buf, promptText);
         showFrame(show);
@@ -182,6 +214,11 @@ int waitSelect(const cv::Mat& baseImg, vector<string>& buf) {
     cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
     while (true) {
         int key = cv::waitKey(20);
+        if (isFavorKey(key)) {
+            showFavor();
+            showFrame(show);
+            continue;
+        }
         if (key == '1') return 1;
         if (key == '2') return 2;
         checkWindow();
@@ -195,6 +232,11 @@ int waitSelect3(const cv::Mat& baseImg, vector<string>& buf) {
     cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
     while (true) {
         int key = cv::waitKey(20);
+        if (isFavorKey(key)) {
+            showFavor();
+            showFrame(show);
+            continue;
+        }
         if (key == '1') return 1;
         if (key == '2') return 2;
         if (key == '3') return 3;
@@ -202,7 +244,6 @@ int waitSelect3(const cv::Mat& baseImg, vector<string>& buf) {
         showFrameCached(show);
     }
 }
-
 
 //图片输出
 cv::Mat p_print(string s) {
@@ -225,6 +266,39 @@ void updateFavor(int person, int favorValue) {
     favor[person] += favorValue;
 }
 
+//查看好感度页面，按空格返回
+void showFavor() {
+    vector<string> favorLines;
+    favorLines.push_back("【好感度】");
+    favorLines.push_back("樊叙：" + to_string(favor[1]));
+    favorLines.push_back("周翼：" + to_string(favor[2]));
+    favorLines.push_back("姜博：" + to_string(favor[3]));
+    favorLines.push_back("");
+    cv::Mat show = renderUI(g_baseBGRA, favorLines, "按空格返回游戏");
+    showFrame(show);
+    while (true) {
+        showFrameCached(show);
+        int key = cv::waitKey(16);
+        if (key == ' ') break;
+        checkWindow();
+    }
+    while (GetAsyncKeyState('F') & 0x8000) {
+        cv::waitKey(16);
+        checkWindow();
+    }
+}
+
+void showCover(const cv::Mat& img, int seconds) {
+    showFrame(img);
+    int waited = 0;
+    while (waited < seconds * 1000) {
+        showFrameCached(img);
+        cv::waitKey(16);
+        waited += 16;
+        checkWindow();
+    }
+}
+
 int main() {
     Gdiplus::GdiplusStartupInput gdiplusSI;
     ULONG_PTR gdiplusToken;
@@ -240,7 +314,17 @@ int main() {
         cv::resizeWindow("story", (int)(img.cols * s), (int)(img.rows * s));
     }
     vector<string> textBuf;
-
+    //封面页：仅图片，停留5秒
+    showCover(img, 5);
+    //说明页：操作说明，按空格开始游戏
+    vector<string> introLines;
+    t_print(img, textBuf, "游戏说明：");
+    t_print(img, textBuf, "按空格进入下一句对话");
+    t_print(img, textBuf, "按F查看当前各角色好感度");
+    t_print(img, textBuf, "", false);
+    t_print(img, textBuf, "按空格开始游戏");
+    cv::waitKey(16);
+    clearScreen(textBuf);
     //第一章
     t_print(img, textBuf, "14班成立，班内同学关系不佳。");
     t_print(img, textBuf, "高皓远认为从竞赛班淘汰的樊叙“装”。");
@@ -248,7 +332,7 @@ int main() {
     clearScreen(textBuf);
     t_print(img, textBuf, "小马在12班讲课被学生刁难。");
     t_print(img, textBuf, "校方不允许竞赛班以外的学生参加化学竞赛。");
-    t_print(img, textBuf, "1:14班凭\"化学杀\"实力说服了化学老师陈阳，最终得到她的支持。");
+    t_print(img, textBuf, "1:14班凭“化学杀”实力说服了化学老师陈阳，最终得到她的支持。");
     t_print(img, textBuf, "2:14班没能成功说服化学老师陈阳。", false);
     a[0] = waitSelect(img, textBuf);
     clearScreen(textBuf);
@@ -270,8 +354,8 @@ int main() {
         clearScreen(textBuf);
     }
     t_print(img, textBuf, "14班初次月考成绩不尽人意，小马遭到压力，立下flag要让班级平均达到550。");
-    t_print(img, textBuf, "游智慧指出\"学历并非唯一标准\"。");
-    t_print(img, textBuf, "1:觉得她说的对，但是告诉大家\"高考也是人生很重要的一步\"。");
+    t_print(img, textBuf, "游智慧指出“学历并非唯一标准”。");
+    t_print(img, textBuf, "1:觉得她说的对，但是告诉大家“高考也是人生很重要的一步”。");
     t_print(img, textBuf, "2:否认她的观点，使她愤然离去。", false);
     a[3] = waitSelect(img, textBuf);
     clearScreen(textBuf);
@@ -285,7 +369,7 @@ int main() {
         t_print(img, textBuf, "再后来座位空了，我最后一次回头看了一眼14班的窗户，窗帘拉着，里面什么都没有。");
         t_print(img, textBuf, "我原本以为自己可以改变什么的。");
         clearScreen(textBuf);
-        t_print(img, textBuf, "刚来的时候，我写过一张纸条贴在办公桌边上：\"没有坏学生，只有还没被看见的学生。\"");
+        t_print(img, textBuf, "刚来的时候，我写过一张纸条贴在办公桌边上：“没有坏学生，只有还没被看见的学生。”");
         t_print(img, textBuf, "那张纸条贴了很久，边角卷了，字迹也模糊了。");
         t_print(img, textBuf, "走的那天我把它撕下来，折了四折，放进大衣口袋里。");
         t_print(img, textBuf, "后来洗衣服的时候忘了掏出来，它就碎了。");
@@ -301,7 +385,7 @@ int main() {
         t_print(img, textBuf, "你问我那一年留下了什么。");
         t_print(img, textBuf, "我留下的不是分数，不是排名，不是高考成绩单上的数字。");
         t_print(img, textBuf, "我留下的是那天阳光落在你脸上的样子,");
-        t_print(img, textBuf, "是你第一次叫我\"老师\"的时候声音还有点抖，");
+        t_print(img, textBuf, "是你第一次叫我“老师”的时候声音还有点抖，");
         t_print(img, textBuf, "是你后来不再躲我的眼神。");
         t_print(img, textBuf, "这些就够了。");
         clearScreen(textBuf);
@@ -314,7 +398,7 @@ int main() {
         t_print(img, textBuf, "但我记得。我记得你们。");
         clearScreen(textBuf);
         t_print(img, textBuf, "【NE1-和光同尘】");
-        t_print(img, textBuf, "按任意键结束游戏", false, "");
+        t_print(img, textBuf, "按空格结束游戏", false, "");
         waitAnyKey(textBuf);
         cv::destroyAllWindows();
         delete g_font;
@@ -323,9 +407,9 @@ int main() {
         return 0;
     }
     //第四章
-    t_print(img, textBuf, "姜博为完成社团任务拍摄了微电影，并上传视频软件，主题是\"别让过度内卷磨灭了自己的个性。");
+    t_print(img, textBuf, "姜博为完成社团任务拍摄了微电影，并上传视频软件，主题是“别让过度内卷磨灭了自己的个性”。");
     t_print(img, textBuf, "被教导主任看到，举报给小马和校长。作为导演和主演的姜博受处分风险，14班一齐为他求情。");
-    t_print(img, textBuf, "恰逢教育局突击检查素质教育落实情况，校长顺势将事件包装成\"学生创新实践案例\"，事件最终平息。");
+    t_print(img, textBuf, "恰逢教育局突击检查素质教育落实情况，校长顺势将事件包装成“学生创新实践案例”，事件最终平息。");
     t_print(img, textBuf, "姜博受到一定打击。");
     clearScreen(textBuf);
     //第五章
@@ -409,7 +493,7 @@ int main() {
         t_print(img, textBuf, "【BE2-光谱红移】");
         t_print(img, textBuf, "“宇宙在膨胀，星辰在远离。”");
         t_print(img, textBuf, "“我们都在坠落，只是隔着光年，再也无法触及彼此。”");
-        t_print(img, textBuf, "按任意键结束游戏", false, "");
+        t_print(img, textBuf, "按空格结束游戏", false, "");
         waitAnyKey(textBuf);
         cv::destroyAllWindows();
         delete g_font;
@@ -423,7 +507,7 @@ int main() {
     //第六章
     t_print(img, textBuf, "小马过年期间回家，被催婚，且家里人都不太看好她的工作。");
     clearScreen(textBuf);
-    t_print(img, textBuf, "辩论大会，题目\"优绩主义究竟是社会进步的动力，还是加剧不公与焦虑的枷锁\"。");
+    t_print(img, textBuf, "辩论大会，题目“优绩主义究竟是社会进步的动力，还是加剧不公与焦虑的枷锁”。");
     t_print(img, textBuf, "高皓远带领14班同学反抗强权压制。");
     clearScreen(textBuf);
     //第七章
@@ -431,7 +515,7 @@ int main() {
     t_print(img, textBuf, "但是由于14班同学的坚持，她继续担任14班班主任。");
     //最终章
     t_print(img, textBuf, "高考当天，小马心情跌宕起伏。");
-    t_print(img, textBuf, "按任意键结束游戏", false, "");
+    t_print(img, textBuf, "按空格结束游戏", false, "");
     waitAnyKey(textBuf);
     cv::destroyAllWindows();
     delete g_font;
