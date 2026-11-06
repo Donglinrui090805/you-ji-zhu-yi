@@ -98,13 +98,11 @@ static void refreshShow(const cv::Mat& show, int totalMs, int stepMs = 16) {
     }
 }
 
-//F键检测：waitKey返回值 + GetAsyncKeyState硬件状态兜底（不依赖窗口焦点）
 static bool isFavorKey(int key) {
     if (key == 'f' || key == 'F') return true;
     return (GetAsyncKeyState('F') & 0x8000) != 0;
 }
 
-//逐字间隔等待；按F返回true，否则等满totalMs返回false
 static bool waitCharInterval(const cv::Mat& show, int totalMs, int stepMs = 16) {
     int waited = 0;
     while (waited < totalMs) {
@@ -117,7 +115,6 @@ static bool waitCharInterval(const cv::Mat& show, int totalMs, int stepMs = 16) 
     return false;
 }
 
-//前向声明：好感度查看页面（定义在后面）
 void showFavor();
 
 cv::Mat renderUI(const cv::Mat& baseBGRA, const vector<string>& lines, const string& prompt = "") {
@@ -318,10 +315,16 @@ int main() {
     showCover(img, 5);
     //说明页：操作说明，按空格开始游戏
     vector<string> introLines;
-    t_print(img, textBuf, "按空格进入下一句对话");
-    t_print(img, textBuf, "按F查看当前各角色好感度");
-    t_print(img, textBuf, "");
-    t_print(img, textBuf, "按空格开始游戏", false);
+    t_print(img, textBuf, "游戏说明：", false);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    t_print(img, textBuf, "按空格进入下一句对话", false);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    t_print(img, textBuf, "按1/2/3选择选项", false);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    t_print(img, textBuf, "按F查看当前各角色好感度", false);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    t_print(img, textBuf, "", false);
+    t_print(img, textBuf, "按空格开始游戏");
     cv::waitKey(16);
     clearScreen(textBuf);
     //第一章
