@@ -1,6 +1,7 @@
 #include<iostream>
 #include<vector>
 #include<string>
+#include<algorithm>
 #include<windows.h>
 #include<objidl.h>
 #include<gdiplus.h>
@@ -22,6 +23,13 @@ int a[110],favor[110];
 Gdiplus::Font* g_font = nullptr;
 Gdiplus::FontFamily* g_fontFamily = nullptr;
 cv::Mat g_baseBGRA;
+//对话历史：记录每句已输出的完整文本，供上下箭头回看
+vector<string> g_history;
+//角色解锁：1=樊叙 2=周翼 3=姜博
+static const char* g_roleNames[4] = {"", "樊叙", "周翼", "姜博"};
+bool g_unlocked[4] = {false, false, false, false};
+vector<int> g_pendingUnlock;   //已首次出现、等待下次清屏弹出解锁页的角色
+vector<int> g_pendingFavor;    //好感度已变化、等待下次清屏弹出提示页的角色
 static wstring toW(const string& s) {
     if (s.empty()) return L"";
     int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
@@ -153,15 +161,61 @@ cv::Mat renderUI(const cv::Mat& baseBGRA, const vector<string>& lines, const str
 
 static void waitAnyKey(const vector<string>& buf, const string& prompt = "") {
     cv::Mat show = renderUI(g_baseBGRA, buf, prompt);
+    int viewIdx = -1;              //-1=当前实时画面；>=0=浏览 g_history[viewIdx]
+    cv::Mat curShow = show;
+    showFrame(curShow);
     while (true) {
-        showFrameCached(show);
+        showFrameCached(curShow);
         int key = cv::waitKey(16);
         if (isFavorKey(key)) {
             showFavor();
-            showFrame(show);
+            showFrame(curShow);
             continue;
         }
-        if (key == ' ') break;
+        //上箭头：回看历史
+        if (GetAsyncKeyState(VK_UP) & 0x8000) {
+            int n = (int)g_history.size();
+            if (viewIdx < 0) {
+                if (n > 0) viewIdx = n - 1;      //首次进入，定位到最新一句
+            } else if (viewIdx > 0) {
+                viewIdx--;
+            }
+            while (GetAsyncKeyState(VK_UP) & 0x8000) { cv::waitKey(16); checkWindow(); }
+            if (viewIdx >= 0) {
+                vector<string> hb;
+                hb.push_back(g_history[viewIdx]);
+                curShow = renderUI(g_baseBGRA, hb, "↑上一句  ↓下一句  空格返回");
+                showFrame(curShow);
+            }
+            continue;
+        }
+        //下箭头：向前浏览，越过最新句则回到实时画面
+        if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
+            if (viewIdx >= 0) {
+                viewIdx++;
+                if (viewIdx >= (int)g_history.size()) {
+                    viewIdx = -1;
+                    curShow = show;
+                } else {
+                    vector<string> hb;
+                    hb.push_back(g_history[viewIdx]);
+                    curShow = renderUI(g_baseBGRA, hb, "↑上一句  ↓下一句  空格返回");
+                }
+                showFrame(curShow);
+            }
+            while (GetAsyncKeyState(VK_DOWN) & 0x8000) { cv::waitKey(16); checkWindow(); }
+            continue;
+        }
+        //空格：浏览中先退出浏览回到当前，实时状态下才推进剧情
+        if (key == ' ') {
+            if (viewIdx >= 0) {
+                viewIdx = -1;
+                curShow = show;
+                showFrame(show);
+                continue;
+            }
+            break;
+        }
         checkWindow();
     }
 }
@@ -193,6 +247,15 @@ void t_print(cv::Mat& baseImg, vector<string>& buf, const string& s, bool waitEn
             showFrame(show);
         }
         checkWindow();
+    }
+    //记录到对话历史（空行不记录）
+    if (!s.empty()) g_history.push_back(s);
+    //检测角色首次出现：未解锁且本句含其名，则标记并入待提示队列
+    for (int i = 1; i <= 3; i++) {
+        if (!g_unlocked[i] && s.find(g_roleNames[i]) != string::npos) {
+            g_unlocked[i] = true;
+            g_pendingUnlock.push_back(i);
+        }
     }
     if (waitEnd) {
         buf.push_back("");
@@ -253,23 +316,61 @@ cv::Mat p_print(string s) {
     return img;
 }
 
+//显示单帧并等待空格（解锁页、好感度变化页共用）
+static void waitSpacePage(const cv::Mat& show) {
+    showFrame(show);
+    while (true) {
+        showFrameCached(show);
+        int key = cv::waitKey(16);
+        if (key == ' ') break;
+        checkWindow();
+    }
+}
+
 //清屏
 void clearScreen(vector<string>& buf) {
     buf.clear();
+    //本次新解锁的角色，单开一页提示，按空格继续
+    for (int idx : g_pendingUnlock) {
+        vector<string> ub;
+        ub.push_back("已解锁角色：" + string(g_roleNames[idx]));
+        ub.push_back("当前好感度：" + to_string(favor[idx]));
+        ub.push_back("");
+        waitSpacePage(renderUI(g_baseBGRA, ub, "按空格继续"));
+    }
+    g_pendingUnlock.clear();
+    //本次好感度有变化的角色，单开一页提示，按空格继续
+    for (int idx : g_pendingFavor) {
+        vector<string> fb;
+        fb.push_back("角色：" + string(g_roleNames[idx]));
+        fb.push_back("当前好感度：" + to_string(favor[idx]));
+        fb.push_back("");
+        waitSpacePage(renderUI(g_baseBGRA, fb, "按空格继续"));
+    }
+    g_pendingFavor.clear();
 }
 
 //好感度系统
 void updateFavor(int person, int favorValue) {
     favor[person] += favorValue;
+    if (favorValue == 0) return;   //数值未变化，不提示
+    //加入待提示队列（去重），下次清屏时单开一页显示最终好感度
+    if (find(g_pendingFavor.begin(), g_pendingFavor.end(), person) == g_pendingFavor.end())
+        g_pendingFavor.push_back(person);
 }
 
 //查看好感度页面，按空格返回
 void showFavor() {
     vector<string> favorLines;
     favorLines.push_back("【好感度】");
-    favorLines.push_back("樊叙：" + to_string(favor[1]));
-    favorLines.push_back("周翼：" + to_string(favor[2]));
-    favorLines.push_back("姜博：" + to_string(favor[3]));
+    bool anyUnlocked = false;
+    for (int i = 1; i <= 3; i++) {
+        if (g_unlocked[i]) {
+            favorLines.push_back(string(g_roleNames[i]) + "：" + to_string(favor[i]));
+            anyUnlocked = true;
+        }
+    }
+    if (!anyUnlocked) favorLines.push_back("当前无已解锁角色");
     favorLines.push_back("");
     cv::Mat show = renderUI(g_baseBGRA, favorLines, "按空格返回游戏");
     showFrame(show);
@@ -311,13 +412,15 @@ int main() {
         cv::resizeWindow("story", (int)(img.cols * s), (int)(img.rows * s));
     }
     vector<string> textBuf;
-    //封面页：仅图片，停留5秒
-    showCover(img, 5);
+    //封面页：仅图片，停留3秒
+    showCover(img, 3);
     //说明页：操作说明，按空格开始游戏
     vector<string> introLines;
     t_print(img, textBuf, "游戏说明：", false);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     t_print(img, textBuf, "按空格进入下一句对话", false);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    t_print(img, textBuf, "按上下箭头显示上一句/下一句", false);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     t_print(img, textBuf, "按1/2/3选择选项", false);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -327,6 +430,7 @@ int main() {
     t_print(img, textBuf, "按空格开始游戏");
     cv::waitKey(16);
     clearScreen(textBuf);
+    g_history.clear();
     //第一章
     t_print(img, textBuf, "14班成立，班内同学关系不佳。");
     t_print(img, textBuf, "高皓远认为从竞赛班淘汰的樊叙“装”。");
