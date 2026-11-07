@@ -30,6 +30,8 @@ static const char* g_roleNames[4] = {"", "樊叙", "周翼", "姜博"};
 bool g_unlocked[4] = {false, false, false, false};
 vector<int> g_pendingUnlock;   //已首次出现、等待下次清屏弹出解锁页的角色
 vector<int> g_pendingFavor;    //好感度已变化、等待下次清屏弹出提示页的角色
+int g_pendingFavorDelta[1010];   //各角色本次清屏周期内的净变化量
+int g_unlockSnapshot[1010];      //各角色解锁瞬间的好感度快照（应为0）
 static wstring toW(const string& s) {
     if (s.empty()) return L"";
     int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
@@ -254,6 +256,14 @@ void t_print(cv::Mat& baseImg, vector<string>& buf, const string& s, bool waitEn
     for (int i = 1; i <= 3; i++) {
         if (!g_unlocked[i] && s.find(g_roleNames[i]) != string::npos) {
             g_unlocked[i] = true;
+            favor[i] = 0;              //解锁时好感度归零
+            //解锁前若已累积好感度变化，作废（初始好感度为0）
+            auto it = find(g_pendingFavor.begin(), g_pendingFavor.end(), i);
+            if (it != g_pendingFavor.end()) {
+                g_pendingFavor.erase(it);
+                g_pendingFavorDelta[i] = 0;
+            }
+            g_unlockSnapshot[i] = favor[i];   //快照解锁瞬间好感度
             g_pendingUnlock.push_back(i);
         }
     }
@@ -330,23 +340,30 @@ static void waitSpacePage(const cv::Mat& show) {
 //清屏
 void clearScreen(vector<string>& buf) {
     buf.clear();
-    //本次新解锁的角色，单开一页提示，按空格继续
+    //本次新解锁的角色，单开一页提示，按空格继续（好感度用解锁瞬间快照）
     for (int idx : g_pendingUnlock) {
         vector<string> ub;
         ub.push_back("已解锁角色：" + string(g_roleNames[idx]));
-        ub.push_back("当前好感度：" + to_string(favor[idx]));
+        ub.push_back("当前好感度：" + to_string(g_unlockSnapshot[idx]));
         ub.push_back("");
         waitSpacePage(renderUI(g_baseBGRA, ub, "按空格继续"));
     }
     g_pendingUnlock.clear();
     //本次好感度有变化的角色，单开一页提示，按空格继续
     for (int idx : g_pendingFavor) {
+        int delta = g_pendingFavorDelta[idx];
+        if (delta == 0) continue;   //净变化为0则不弹页
         vector<string> fb;
         fb.push_back("角色：" + string(g_roleNames[idx]));
+        if (delta > 0)
+            fb.push_back("好感度增加（" + to_string(delta) + "）");
+        else
+            fb.push_back("好感度减少（" + to_string(-delta) + "）");
         fb.push_back("当前好感度：" + to_string(favor[idx]));
         fb.push_back("");
         waitSpacePage(renderUI(g_baseBGRA, fb, "按空格继续"));
     }
+    for (int idx : g_pendingFavor) g_pendingFavorDelta[idx] = 0;
     g_pendingFavor.clear();
 }
 
@@ -357,6 +374,7 @@ void updateFavor(int person, int favorValue) {
     //加入待提示队列（去重），下次清屏时单开一页显示最终好感度
     if (find(g_pendingFavor.begin(), g_pendingFavor.end(), person) == g_pendingFavor.end())
         g_pendingFavor.push_back(person);
+    g_pendingFavorDelta[person] += favorValue;
 }
 
 //查看好感度页面，按空格返回
@@ -449,6 +467,9 @@ int main() {
         t_print(img, textBuf, "1:进一步指责。");
         t_print(img, textBuf, "2:深入了解具体情况。", false);
         a[1] = waitSelect(img, textBuf);
+        if(a[1] == 2) {
+            updateFavor(2, 50);
+        }
         clearScreen(textBuf);
         //第三章
         t_print(img, textBuf, "化学竞赛出结果，樊叙、游智慧落榜，姜博入围国赛。");
@@ -467,7 +488,6 @@ int main() {
     clearScreen(textBuf);
     if (a[3] == 1) {
         t_print(img, textBuf, "樊叙成为数学课代表，与之前关系一般的朱李泰共事，解开了对于数学的心理压力。");
-        updateFavor(1, -50);
         clearScreen(textBuf);
     } 
     else {
